@@ -33,39 +33,60 @@ io.on('connection', (socket) => {
 setInterval(() => {
   Object.keys(games).forEach((gameId) => {
     const game = games[gameId];
-    if (!game.isStarted || !game.currentTurn) return;
+
+    // Лог текущего состояния игры
+    console.log(`[TIMER] Checking game: ${gameId}`);
+    console.log(`[TIMER] Game state:`, {
+      isStarted: game?.isStarted,
+      currentTurn: game?.currentTurn,
+      timeLeft: game?.timeLeft,
+      isGameOver: game?.game?.isGameOver?.(),
+    });
+
+    // Проверяем, активна ли игра
+    if (!game || !game.isStarted || !game.currentTurn || game.game.isGameOver()) {
+      console.log(`[TIMER] Game ${gameId} is not active or already finished. Skipping.`);
+      return;
+    }
 
     const currentTime = Date.now();
     const elapsedTime = Math.floor((currentTime - game.lastMoveTime) / 1000);
 
-    // Обновляем только если прошло время
     if (elapsedTime > 0) {
       const currentColor = game.currentTurn;
 
-      console.log('[TIMER] Current Turn:', currentColor);
-      console.log('[TIMER] Elapsed Time:', elapsedTime);
-      console.log('[TIMER] Time Left Before Update:', game.timeLeft);
+      console.log(`[TIMER] Current Turn: ${currentColor}`);
+      console.log(`[TIMER] Elapsed Time: ${elapsedTime}`);
+      console.log(`[TIMER] Time Left Before Update:`, game.timeLeft);
 
       game.timeLeft[currentColor] -= elapsedTime;
 
+      // Проверяем, истекло ли время у текущего игрока
       if (game.timeLeft[currentColor] <= 0) {
         const winner = currentColor === 'white' ? 'black' : 'white';
+
+        console.log(`[TIMER] Player ${currentColor}'s time expired. Declaring winner: ${winner}.`);
+
         io.to(gameId).emit('gameEnded', {
           message: `Время игрока ${currentColor} истекло. Победитель: ${winner}!`,
         });
+
+        console.log(`[TIMER] Game ${gameId} ended. Deleting from active games.`);
         delete games[gameId];
         return;
       }
 
-      // Обновляем lastMoveTime только после обновления времени
+      // Обновляем lastMoveTime
       game.lastMoveTime = currentTime;
 
-      console.log('[TIMER] Time Left After Update:', game.timeLeft);
+      console.log(`[TIMER] Time Left After Update:`, game.timeLeft);
 
+      // Отправляем обновление времени только для активных игр
       io.to(gameId).emit('syncTime', { timeLeft: game.timeLeft });
     }
   });
 }, 1000);
+
 
 
 

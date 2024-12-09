@@ -1,58 +1,85 @@
-module.exports = (io, socket, games) => {
-socket.on('makeMove', ({ gameId, fromRow, fromCol, toRow, toCol }) => {
-  const game = games[gameId];
-  if (!game || !game.timeLeft) return;
+const { Chess } = require('chess.js');
 
-  const currentColor = game.game.turn() === 'w' ? 'white' : 'black';
-  if (currentColor !== game.colors[socket.id]) {
-    socket.emit('errorMessage', { message: 'Сейчас не ваш ход' });
+module.exports = (io, socket, games) => {
+socket.on('move', ({ gameId, move }) => {
+  console.log(`[SERVER] Received move:`, move, `for game: ${gameId}`);
+  const game = games[gameId];
+  if (!game) {
+    socket.emit('error', { message: 'Игра не найдена.' });
+    console.log(`[SERVER] Game not found: ${gameId}`);
     return;
   }
 
-  const move = {
-    from: `${String.fromCharCode(97 + fromCol)}${8 - fromRow}`,
-    to: `${String.fromCharCode(97 + toCol)}${8 - toRow}`
-  };
+  const currentPlayer = game.players.find((player) => player.id === socket.id);
+  const currentColor = game.colors[socket.id];
+
+  console.log(`[SERVER] Current turn: ${game.currentTurn}, Player color: ${currentColor}`);
+
+  if (game.currentTurn !== currentColor) {
+    socket.emit('error', { message: 'Сейчас не ваш ход.' });
+    console.log(`[SERVER] Not this player's turn. Move rejected.`);
+    return;
+  }
 
   try {
-    const chessMove = game.game.move(move);
-    if (!chessMove) {
-      socket.emit('errorMessage', { message: 'Недопустимый ход' });
+    const result = game.game.move(move); // Поддержка промоции через move.promotion
+    if (!result) {
+      socket.emit('error', { message: 'Неверный ход.' });
+      console.log(`[SERVER] Invalid move:`, move);
       return;
     }
 
-    const currentTime = Date.now();
-    const elapsedTime = Math.floor((currentTime - game.lastMoveTime) / 1000);
-    game.timeLeft[currentColor] -= elapsedTime;
+    // Если была захвачена фигура, добавляем её в `result.captured`
+    const capturedPiece = result.captured ? `${result.color}${result.captured.toUpperCase()}` : null;
 
-    if (game.timeLeft[currentColor] <= 0) {
-      const winner = currentColor === 'white' ? 'black' : 'white';
-      io.to(gameId).emit('gameEnded', {
-        message: `Время игрока ${currentColor} истекло. Победитель: ${winner}!`
+    // Отправляем обновление клиенту
+    io.to(gameId).emit('updateBoard', {
+      board: game.game.fen(),
+      currentTurn: game.currentTurn,
+      move,
+      capturedPiece, // Передаём захваченную фигуру
+      gameOver: false,
+    });
+
+    console.log(`[SERVER] Move successful:`, result);
+
+    // Обновление текущего хода и времени
+    game.currentTurn = game.currentTurn === 'white' ? 'black' : 'white';
+    game.lastMoveTime = Date.now();
+
+    // Проверка завершения игры
+    if (game.game.isGameOver()) {
+      const winner = game.currentTurn === 'white' ? 'Черные' : 'Белые';
+      const message = game.game.isCheckmate()
+        ? `Мат! Победитель: ${winner}`
+        : 'Игра завершена.';
+
+      // Отправка результата обеим сторонам
+      io.to(gameId).emit('updateBoard', {
+        gameId,
+        board: game.game.fen(),
+        currentTurn: game.currentTurn,
+        move,
+        gameOver: true,
+        message,
       });
-      delete games[gameId];
+
+      console.log(`[SERVER] Game over. Message sent: ${message}`);
+      delete games[gameId]; // Удаление игры после завершения
       return;
     }
 
-    game.lastMoveTime = currentTime;
-    game.currentTurn = currentColor === 'white' ? 'black' : 'white';
-
-    const newBoard = game.game.board();
-    io.to(game.players[0].id).emit('updateBoard', {
+    // Отправка обновлений для обоих игроков
+    io.to(gameId).emit('updateBoard', {
       gameId,
-      board: newBoard,
+      board: game.game.fen(),
       currentTurn: game.currentTurn,
-      timeLeft: game.timeLeft
+      move,
+      gameOver: false,
     });
-    io.to(game.players[1].id).emit('updateBoard', {
-      gameId,
-      board: newBoard,
-      currentTurn: game.currentTurn,
-      timeLeft: game.timeLeft
-    });
-
   } catch (error) {
-    socket.emit('errorMessage', { message: `Ошибка: ${error.message}` });
+    console.error(`[SERVER] Error processing move: ${error.message}`);
+    socket.emit('error', { message: 'Ошибка обработки хода: ' + error.message });
   }
 });
 };

@@ -47,15 +47,17 @@ module.exports = (io, socket, games) => {
     game.players = game.players.filter(player => player.userId !== userId);
     console.log(`Игрок ${userId} покинул игру ${gameId}`);
 
-    // Проверка количества оставшихся игроков
     if (game.players.length === 0) {
+      // Если игроков больше нет, удаляем игру
       clearInterval(game.timerInterval); // Останавливаем таймер
       delete games[gameId];
       console.log(`Игра ${gameId} удалена, так как в ней больше нет игроков.`);
     } else {
       // Уведомляем оставшегося игрока о победе
       const remainingPlayer = game.players[0];
-      io.to(remainingPlayer.id).emit('gameEnded', { message: 'Ваш противник покинул игру. Вы победили!' });
+      io.to(remainingPlayer.id).emit('gameEnded', { 
+        message: 'Ваш противник покинул игру. Вы победили!' 
+      });
 
       // Немедленно завершаем игру
       clearInterval(game.timerInterval); // Останавливаем таймер

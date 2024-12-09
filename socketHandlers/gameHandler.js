@@ -104,39 +104,46 @@ module.exports = (io, socket, games) => {
     }
   });
 
-  const startGameTimer = (io, gameId, game) => {
-    if (game.timerInterval) return; // Избегаем повторного запуска таймера
+const startGameTimer = (io, gameId, game) => {
+  // Останавливаем существующий таймер, если он есть
+  if (game.timerInterval) {
+    clearInterval(game.timerInterval);
+    game.timerInterval = null;
+    console.log(`[SERVER] Старый таймер для игры ${gameId} остановлен.`);
+  }
 
-    game.timerInterval = setInterval(() => {
-      if (!game.isStarted) {
+  game.timerInterval = setInterval(() => {
+    if (!game.isStarted || game.game.isGameOver()) {
+      console.log(`[TIMER] Игра ${gameId} завершена или не началась. Останавливаем таймер.`);
+      clearInterval(game.timerInterval);
+      game.timerInterval = null;
+      return;
+    }
+
+    const currentTime = Date.now();
+    const elapsedTime = Math.floor((currentTime - game.lastMoveTime) / 1000);
+    const currentColor = game.currentTurn;
+
+    if (elapsedTime > 0) {
+      game.timeLeft[currentColor] -= elapsedTime;
+
+      if (game.timeLeft[currentColor] <= 0) {
+        const winner = currentColor === 'white' ? 'black' : 'white';
+        io.to(gameId).emit('gameEnded', {
+          message: `Время игрока ${currentColor} истекло. Победитель: ${winner}!`,
+        });
         clearInterval(game.timerInterval);
-        game.timerInterval = null;
+        delete games[gameId];
         return;
       }
 
-      const currentTime = Date.now();
-      const elapsedTime = Math.floor((currentTime - game.lastMoveTime) / 1000);
-      const currentColor = game.currentTurn;
+      game.lastMoveTime = currentTime;
+      io.to(gameId).emit('syncTime', { timeLeft: game.timeLeft });
+    }
+  }, 1000);
 
-      if (elapsedTime > 0) {
-        game.timeLeft[currentColor] -= elapsedTime;
+  console.log(`[TIMER] Таймер запущен для игры ${gameId}`);
+};
 
-        if (game.timeLeft[currentColor] <= 0) {
-          const winner = currentColor === 'white' ? 'black' : 'white';
-          io.to(gameId).emit('gameEnded', {
-            message: `Время игрока ${currentColor} истекло. Победитель: ${winner}!`,
-          });
-          clearInterval(game.timerInterval);
-          delete games[gameId];
-          return;
-        }
 
-        game.lastMoveTime = currentTime;
-
-        io.to(gameId).emit('syncTime', { timeLeft: game.timeLeft });
-      }
-    }, 1000);
-
-    console.log(`Таймер запущен для игры ${gameId}`);
-  };
 };
