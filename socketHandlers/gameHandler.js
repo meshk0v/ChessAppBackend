@@ -1,5 +1,4 @@
 const { Chess } = require('chess.js');
-
 module.exports = (io, socket, games) => {
   socket.on('createGame', ({ id, time, userId }) => {
     const initialTime = time * 60;
@@ -128,9 +127,11 @@ const startGameTimer = (io, gameId, game) => {
       game.timeLeft[currentColor] -= elapsedTime;
 
       if (game.timeLeft[currentColor] <= 0) {
-        const winner = currentColor === 'white' ? 'black' : 'white';
+        const currentColor2 = currentColor === 'white' ? 'Белые' : 'Черные';
+        const winner = currentColor === 'white' ? 'Черные' : 'Белые';
+
         io.to(gameId).emit('gameEnded', {
-          message: `Время игрока ${currentColor} истекло. Победитель: ${winner}!`,
+          message: `Победитель: ${winner}! Время игрока ${currentColor2} истекло.`,
         });
         clearInterval(game.timerInterval);
         delete games[gameId];
@@ -144,6 +145,5 @@ const startGameTimer = (io, gameId, game) => {
 
   console.log(`[TIMER] Таймер запущен для игры ${gameId}`);
 };
-
 
 };

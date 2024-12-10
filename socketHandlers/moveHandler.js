@@ -6,7 +6,6 @@ socket.on('move', ({ gameId, move }) => {
   const game = games[gameId];
   if (!game) {
     socket.emit('error', { message: 'Игра не найдена.' });
-    console.log(`[SERVER] Game not found: ${gameId}`);
     return;
   }
 
@@ -49,13 +48,13 @@ socket.on('move', ({ gameId, move }) => {
 
     // Проверка завершения игры
     if (game.game.isGameOver()) {
-      const winner = game.currentTurn === 'white' ? 'Черные' : 'Белые';
+      const winner = game.currentTurn === 'white' ? 'Черные' : 'Белые'; // Победитель — противоположный текущему ходу
       const message = game.game.isCheckmate()
-        ? `Мат! Победитель: ${winner}`
-        : 'Игра завершена.';
+        ? `${winner}`
+        : 'Игра завершена вничью.';
 
       // Отправка результата обеим сторонам
-      io.to(gameId).emit('updateBoard', {
+      io.to(gameId).emit('gameEnded', {
         gameId,
         board: game.game.fen(),
         currentTurn: game.currentTurn,
@@ -68,6 +67,7 @@ socket.on('move', ({ gameId, move }) => {
       delete games[gameId]; // Удаление игры после завершения
       return;
     }
+
 
     // Отправка обновлений для обоих игроков
     io.to(gameId).emit('updateBoard', {
