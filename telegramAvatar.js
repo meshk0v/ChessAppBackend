@@ -3,7 +3,8 @@ const axios = require('axios');
 const path = require('path');
 const router = express.Router();
 
-const BOT_TOKEN = 'YOUR_BOT_TOKEN'; // Замените на токен вашего бота
+require('dotenv').config();
+const BOT_TOKEN = process.env.BOT_TOKEN;
 
 router.get('/get_telegram_avatar/:user_id', async (req, res) => {
   const { user_id } = req.params;
