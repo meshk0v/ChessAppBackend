@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('./db'); // Подключаем модуль работы с базой
+const { requireTelegramUser } = require('./auth');
 const router = express.Router();
 
 const { uniqueNamesGenerator, adjectives, animals } = require('unique-names-generator');
@@ -12,8 +13,9 @@ const customConfig = {
 };
 
 // Эндпоинт для проверки и добавления пользователя
-router.post('/check-or-add-user', async (req, res) => {
-  let { telegram_id, username, first_name, last_name, avatar_url } = req.body;
+router.post('/check-or-add-user', requireTelegramUser, async (req, res) => {
+  let { username, first_name, last_name, avatar_url } = req.body;
+  const telegram_id = req.tgUser.id; // id берём только из проверенных данных Telegram
 
   try {
     // Генерация уникального никнейма, если username = 'unknown'
@@ -126,9 +128,18 @@ GROUP BY u.telegram_id, u.username, u.avatar_url, r.rating;
   }
 });
 
-router.put('/:telegram_id', async (req, res) => {
+router.put('/:telegram_id', requireTelegramUser, async (req, res) => {
   const { telegram_id } = req.params;
   const { username } = req.body;
+
+  // Менять можно только своё имя
+  if (String(req.tgUser.id) !== String(telegram_id)) {
+    return res.status(403).json({ message: 'Можно изменить только своё имя пользователя' });
+  }
+
+  if (typeof username !== 'string' || !username.trim() || username.length > 32) {
+    return res.status(400).json({ message: 'Имя пользователя должно быть от 1 до 32 символов' });
+  }
 
   try {
     // Проверяем, существует ли уже такое имя пользователя

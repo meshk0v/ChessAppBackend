@@ -8,6 +8,9 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 
 router.get('/get_telegram_avatar/:user_id', async (req, res) => {
   const { user_id } = req.params;
+  if (!/^\d+$/.test(user_id)) {
+    return res.status(400).json({ error: 'Некорректный user_id' });
+  }
   try {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/getUserProfilePhotos?user_id=${user_id}&limit=1`;
     const response = await axios.get(url);
